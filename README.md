@@ -19,6 +19,10 @@ A terminal-based calendar application for tracking weekly activities.
 dotnet restore
 dotnet run
 ```
+For a simple executable, use this command in your project directory:
+'''bash
+dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+'''
 
 ## Usage
 The application provides a menu-driven interface with options to:
