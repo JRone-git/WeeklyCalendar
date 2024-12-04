@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
-using Microsoft.Data.Sqlite;
+using System.Linq;
+using WeeklyCalendar.Data;
+using WeeklyCalendar.Models;
 
 namespace WeeklyCalendar
 {
     class Program
     {
         private static DatabaseManager _dbManager = new DatabaseManager();
+        private static int _currentYear = DateTime.Now.Year;
+        private static int _currentWeek = System.Globalization.ISOWeek.GetWeekOfYear(DateTime.Now);
 
         static void Main(string[] args)
         {
@@ -30,6 +34,9 @@ namespace WeeklyCalendar
                         DeleteActivity();
                         break;
                     case "5":
+                        NavigateWeeks();
+                        break;
+                    case "6":
                         return;
                     default:
                         Console.WriteLine("Invalid option. Please try again.");
@@ -41,32 +48,49 @@ namespace WeeklyCalendar
         static void ShowMenu()
         {
             Console.Clear();
-            Console.WriteLine("=== Weekly Calendar ===");
+            Console.WriteLine($"=== Weekly Calendar - Week {_currentWeek}/{_currentYear} ===");
             Console.WriteLine("1. Add new activity");
             Console.WriteLine("2. View activities");
             Console.WriteLine("3. Edit activity");
             Console.WriteLine("4. Delete activity");
-            Console.WriteLine("5. Exit");
+            Console.WriteLine("5. Change week");
+            Console.WriteLine("6. Exit");
             Console.Write("Choose an option: ");
         }
 
         static void AddNewActivity()
         {
             Console.Clear();
-            Console.WriteLine("Enter day of week (Monday-Sunday): ");
-            var day = Console.ReadLine();
+            var weekStart = System.Globalization.ISOWeek.ToDateTime(_currentYear, _currentWeek, DayOfWeek.Monday);
+            var dates = Enumerable.Range(0, 7).Select(days => weekStart.AddDays(days)).ToList();
+
+            Console.WriteLine("Select day:");
+            for (int i = 0; i < dates.Count; i++)
+            {
+                var date = dates[i];
+                Console.WriteLine($"{i + 1}. {date.DayOfWeek} ({date.ToShortDateString()})");
+            }
+
+            if (!int.TryParse(Console.ReadLine(), out int dayChoice) || dayChoice < 1 || dayChoice > 7)
+            {
+                Console.WriteLine("Invalid choice. Press any key to continue...");
+                Console.ReadKey();
+                return;
+            }
+
+            var selectedDate = dates[dayChoice - 1];
 
             Console.WriteLine("Enter activity description: ");
             var description = Console.ReadLine();
 
-            if (string.IsNullOrWhiteSpace(day) || string.IsNullOrWhiteSpace(description))
+            if (string.IsNullOrWhiteSpace(description))
             {
                 Console.WriteLine("Invalid input. Press any key to continue...");
                 Console.ReadKey();
                 return;
             }
 
-            _dbManager.AddActivity(day, description);
+            _dbManager.AddActivity(selectedDate.DayOfWeek.ToString(), description);
             Console.WriteLine("Activity added successfully! Press any key to continue...");
             Console.ReadKey();
         }
@@ -74,20 +98,26 @@ namespace WeeklyCalendar
         static void ViewActivities()
         {
             Console.Clear();
-            string[] days = { "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday" };
+            var activities = _dbManager.GetActivitiesByWeek(_currentYear, _currentWeek);
+            
+            // Get dates for the current week
+            var weekStart = System.Globalization.ISOWeek.ToDateTime(_currentYear, _currentWeek, DayOfWeek.Monday);
+            var dates = Enumerable.Range(0, 7).Select(days => weekStart.AddDays(days)).ToList();
 
-            foreach (var day in days)
+            for (int i = 0; i < 7; i++)
             {
-                Console.WriteLine($"\n=== {day} ===");
-                var activities = _dbManager.GetActivitiesByDay(day);
+                var date = dates[i];
+                var day = date.DayOfWeek.ToString();
+                Console.WriteLine($"\n=== {day} ({date.ToShortDateString()}) ===");
+                var dayActivities = activities.Where(a => a.DayOfWeek == day).ToList();
                 
-                if (activities.Count == 0)
+                if (!dayActivities.Any())
                 {
                     Console.WriteLine("No activities recorded");
                 }
                 else
                 {
-                    foreach (var activity in activities)
+                    foreach (var activity in dayActivities)
                     {
                         Console.WriteLine($"[ID: {activity.Id}] - {activity.Description} (Added: {activity.Date.ToShortDateString()})");
                     }
@@ -182,6 +212,42 @@ namespace WeeklyCalendar
             
             Console.WriteLine("Press any key to continue...");
             Console.ReadKey();
+        }
+
+        static void NavigateWeeks()
+        {
+            Console.Clear();
+            Console.WriteLine("1. Previous week");
+            Console.WriteLine("2. Next week");
+            Console.WriteLine("3. Go to specific week");
+            Console.WriteLine("4. Return to current week");
+            Console.WriteLine("5. Back to main menu");
+            
+            var choice = Console.ReadLine();
+            switch (choice)
+            {
+                case "1":
+                    var prev = _dbManager.GetPreviousWeek(_currentYear, _currentWeek);
+                    _currentYear = prev.Year;
+                    _currentWeek = prev.Week;
+                    break;
+                case "2":
+                    var next = _dbManager.GetNextWeek(_currentYear, _currentWeek);
+                    _currentYear = next.Year;
+                    _currentWeek = next.Week;
+                    break;
+                case "3":
+                    Console.Write("Enter week number (1-52): ");
+                    if (int.TryParse(Console.ReadLine(), out int week) && week >= 1 && week <= 52)
+                    {
+                        _currentWeek = week;
+                    }
+                    break;
+                case "4":
+                    _currentYear = DateTime.Now.Year;
+                    _currentWeek = System.Globalization.ISOWeek.GetWeekOfYear(DateTime.Now);
+                    break;
+            }
         }
     }
 } 
